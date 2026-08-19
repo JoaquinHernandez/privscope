@@ -1,49 +1,57 @@
 # privscope
-____       _       ____                       
- |  _ \ _ __(_)_   _/ ___|  ___ ___  _ __   ___ 
- | |_) | '__| \ \ / /\___ \ / __/ _ \| '_ \ / _ \
- |  __/| |  | |\ V /  ___) | (_| (_) | |_) |  __/
- |_|   |_|  |_| \_/  |____/ \___\___/| .__/ \___|
-                                     |_|         
- :: Linux Misconfiguration & PrivEsc Vector Auditor ::
+<div align="center">
 
-[CRITICAL] Dangerous SUID Binaries Found
-  SUID binaries detected that allow arbitrary file read/write or root shell execution.
-  -> /usr/bin/find (Known GTFOBins exploit vector)
-  Remediation: Remove the SUID bit: `chmod u-s <path>` if elevated execution is not strictly required.
-------------------------------------------------------------
-[HIGH] Wildcard Injection in Scheduled Jobs
-  Cron commands use '*' wildcards with tools that support dangerous CLI flags.
-  -> /etc/crontab -> 'tar -czf /var/backups/backup.tar.gz *' (Vulnerable to tar argument injection)
-  Remediation: Avoid '*' expansions in cron commands; use explicit file paths or write wrapper scripts.
-------------------------------------------------------------
+# 🛡️ PrivScope
 
-privscope/
-├── .github/
-│   └── workflows/
-│       └── lint-and-test.yml    # Automated CI tests
-├── docs/
-│   └── architecture.md
-├── privscope/
-│   ├── __init__.py
-│   ├── cli.py                   # Argument parsing & execution flow
-│   ├── output.py                # Terminal formatting & JSON exporter
-│   ├── checks/
-│   │   ├── __init__.py
-│   │   ├── base.py              # Abstract check base class
-│   │   ├── sudo.py              # Sudo rules & NOPASSWD checks
-│   │   ├── suid.py              # SUID/SGID binaries & GTFOBins match
-│   │   ├── capabilities.py      # Linux capabilities inspection
-│   │   ├── cron.py              # Writable cron jobs & path injection
-│   │   └── permissions.py       # Sensitive world-writable files (/etc/passwd, etc.)
-│   └── data/
-│       └── gtfobins.json        # Curated list of known dangerous binaries
-├── tests/
-│   └── test_checks.py
-├── .gitignore
-├── LICENSE                      # MIT or Apache 2.0
-├── pyproject.toml
-└── README.md                    # Detailed documentation with badges and GIF demo
+**A Modular, Zero-Dependency Linux Privilege Escalation & System Hardening Engine**
+
+[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20POSIX-E95420.svg?style=flat-square&logo=linux&logoColor=white)]()
+[![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg?style=flat-square)](https://github.com/astral-sh/ruff)
+[![Tests: Passing](https://img.shields.io/badge/tests-passing-brightgreen.svg?style=flat-square&logo=githubactions&logoColor=white)]()
+
+*PrivScope performs deep, non-destructive privilege escalation enumeration and security compliance checks on Linux endpoints using only Python standard library components.*
+
+[Key Features](#-key-features) • [Quick Start](#-quick-start) • [Audit Modules](#-audit-modules--threat-coverage) • [CLI Reference](#-cli-reference) • [CI/CD & JSON Export](#-cicd-pipeline--json-export) • [Docker Testbed](#-docker-testbed-safe-testing) • [Contributing](#-contributing)
+
+---
+
+</div>
+
+## 📌 Executive Summary
+
+**PrivScope** bridges the gap between offensive enumeration scripts (like LinPEAS / LinEnum) and enterprise security auditing tools (like Lynis). 
+
+When auditing minimal Linux environments—such as stripped-down container base images, CTF challenge boxes, restricted bastion hosts, or hardened servers—external dependencies like compiler toolchains, package managers, or `pip` modules are rarely available.
+
+PrivScope solves this by operating under a strict constraint: **Zero Third-Party Dependencies**. It runs natively using standard library Python 3 (`os`, `platform`, `subprocess`, `shlex`, `re`) while providing structured, colorized terminal reporting and machine-readable JSON exports.
+
+---
+
+## 🚀 Key Features
+
+* ⚡ **Zero Third-Party Dependencies:** Requires only standard Python $\ge$ 3.8. No `pip install` or external packages required.
+* 🎯 **GTFOBins Signature Correlation:** Cross-references active SUID/SGID binaries directly against known binary bypass and escalation patterns.
+* 🧬 **Semantic Kernel CVE Matching:** Parses kernel release numbers against unpatched Local Privilege Escalation (LPE) boundaries (e.g., Dirty Pipe, Dirty COW, Netfilter UAF).
+* ⚙️ **Process & File Capabilities:** Scans for dangerous binary capabilities (`cap_setuid`, `cap_dac_override`) and inspects inherited process capability masks (`CapEff`).
+* ⏰ **Cron & Wildcard Abuse Detection:** Flags writable cron jobs, modifiable script targets, and argument injection patterns (`*` wildcards with `tar`, `rsync`, etc.).
+* 🛤️ **PATH Environment Integrity:** Detects empty entries (`::`), relative search directories (`.`), and high-priority writable paths that allow command hijacking.
+* 🛡️ **Actionable Remediation Commands:** Every finding provides exact shell commands to patch and harden the target system.
+
+---
+
+## 📥 Quick Start
+
+### Method 1: Clone & Run Locally
+
+```bash
+# Clone the repository
+git clone [https://github.com/yourusername/privscope.git](https://github.com/yourusername/privscope.git)
+cd privscope
+
+# Execute the audit runner
+python3 -m privscope.cli
 
 python3 -m privscope.cli --json > audit_results.json
 
