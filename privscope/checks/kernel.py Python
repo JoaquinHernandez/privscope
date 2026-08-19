@@ -1,0 +1,118 @@
+"""Audit running kernel against known high-severity Linux Local Privilege Escalation (LPE) CVEs."""
+
+import platform
+import re
+from typing import List, Optional, Tuple
+from privscope.checks.base import BaseCheck, CheckResult, Severity
+
+
+class KernelVulnDefinition:
+    def __init__(
+        self,
+        cve: str,
+        name: str,
+        min_ver: Tuple[int, ...],
+        max_fixed: Tuple[int, ...],
+        description: str,
+    ):
+        self.cve = cve
+        self.name = name
+        self.min_ver = min_ver        # Inclusive
+        self.max_fixed = max_fixed    # Exclusive (patched release)
+        self.description = description
+
+
+KNOWN_KERNEL_VULNS: List[KernelVulnDefinition] = [
+    KernelVulnDefinition(
+        cve="CVE-2016-5195",
+        name="Dirty COW",
+        min_ver=(2, 6, 22),
+        max_fixed=(4, 8, 3),
+        description="Race condition in mm/gup.c allows read-only memory mapping overwrite.",
+    ),
+    KernelVulnDefinition(
+        cve="CVE-2021-3493",
+        name="OverlayFS Ubuntu LPE",
+        min_ver=(3, 0, 0),
+        max_fixed=(5, 11, 0),
+        description="Improper user namespace capability validation in OverlayFS.",
+    ),
+    KernelVulnDefinition(
+        cve="CVE-2022-0847",
+        name="Dirty Pipe",
+        min_ver=(5, 8, 0),
+        max_fixed=(5, 16, 11),
+        description="Pipe buffer flag uninitialized write flaw allows arbitrary file overwrite.",
+    ),
+    KernelVulnDefinition(
+        cve="CVE-2023-32233",
+        name="Netfilter nf_tables UAF",
+        min_ver=(5, 14, 0),
+        max_fixed=(6, 3, 2),
+        description="Use-after-free in nf_tables batch processing allows root execution.",
+    ),
+    KernelVulnDefinition(
+        cve="CVE-2024-1086",
+        name="Netfilter Double-Free LPE",
+        min_ver=(5, 14, 0),
+        max_fixed=(6, 8, 0),
+        description="Double-free in nft_verdict_init() allows arbitrary kernel memory control.",
+    ),
+]
+
+
+class KernelCheck(BaseCheck):
+    @property
+    def name(self) -> str:
+        return "Kernel Exploit Matcher"
+
+    def _parse_version(self, release_str: str) -> Optional[Tuple[int, int, int]]:
+        """Parse major, minor, patch from standard Linux release strings."""
+        match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", release_str)
+        if not match:
+            return None
+        major = int(match.group(1))
+        minor = int(match.group(2))
+        patch = int(match.group(3)) if match.group(3) is not None else 0
+        return (major, minor, patch)
+
+    def run(self) -> List[CheckResult]:
+        raw_release = platform.release()
+        parsed_ver = self._parse_version(raw_release)
+
+        if not parsed_ver:
+            return [
+                CheckResult(
+                    title="Kernel Version Unresolved",
+                    severity=Severity.INFO,
+                    description=f"Could not parse kernel release string: {raw_release}",
+                    findings=[],
+                )
+            ]
+
+        vulnerable_cves = []
+        for vuln in KNOWN_KERNEL_VULNS:
+            if vuln.min_ver <= parsed_ver < vuln.max_fixed:
+                vulnerable_cves.append(
+                    f"{vuln.cve} ({vuln.name}) -> {vuln.description} [Fixed in {'.'.join(map(str, vuln.max_fixed))}]"
+                )
+
+        if vulnerable_cves:
+            return [
+                CheckResult(
+                    title=f"Potential Kernel Vulnerabilities ({raw_release})",
+                    severity=Severity.HIGH,
+                    description="The running kernel matches unpatched version ranges for known LPE exploits.",
+                    findings=vulnerable_cves,
+                    remediation="Apply upstream distribution security updates and reboot into the patched kernel.",
+                )
+            ]
+
+        return [
+            CheckResult(
+                title=f"Kernel Baseline Clean ({raw_release})",
+                severity=Severity.INFO,
+                description="No matching critical kernel CVEs in local signature database.",
+                findings=[f"Active Kernel: {raw_release}"],
+            )
+        ]
